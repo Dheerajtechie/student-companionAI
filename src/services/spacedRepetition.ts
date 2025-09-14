@@ -3,468 +3,277 @@ import type {
   SpacedRepetitionCard, 
   CreateSpacedRepetitionCardData, 
   UpdateSpacedRepetitionCardData,
-  ReviewResult,
-  SpacedRepetitionStats
+  SpacedRepetitionStats,
+  ReviewResult
 } from '../types/spacedRepetition'
-import type { Database } from '../types/database'
 
-type SpacedRepetitionCardRow = Database['public']['Tables']['spaced_repetition_cards']['Row']
-type SpacedRepetitionCardInsert = Database['public']['Tables']['spaced_repetition_cards']['Insert']
-type SpacedRepetitionCardUpdate = Database['public']['Tables']['spaced_repetition_cards']['Update']
-type QuestionAttemptRow = Database['public']['Tables']['question_attempts']['Row']
-type QuestionAttemptInsert = Database['public']['Tables']['question_attempts']['Insert']
+const INITIAL_EASE_FACTOR = 2.5
+const INITIAL_INTERVAL = 1
+const MINIMUM_EASE_FACTOR = 1.3
+const MAXIMUM_EASE_FACTOR = 5.0
 
 export class SpacedRepetitionService {
-  // SM-2 Algorithm constants
-  private static readonly INITIAL_EASE_FACTOR = 2.5
-  private static readonly MIN_EASE_FACTOR = 1.3
-  private static readonly INITIAL_INTERVAL = 1
-  private static readonly SECOND_INTERVAL = 6
-
-  // Get all spaced repetition cards for a user
-  static async getSpacedRepetitionCards(userId: string): Promise<SpacedRepetitionCard[]> {
-    const { data, error } = await supabase
-      .from('spaced_repetition_cards')
-      .select(`
-        *,
-        questions (
-          id,
-          question_text,
-          question_type,
-          options,
-          correct_answer,
-          explanation,
-          difficulty,
-          tags,
-          subjects (
-            id,
-            name,
-            color,
-            icon
-          )
-        )
-      `)
-      .eq('user_id', userId)
-      .order('next_review_date', { ascending: true })
-
-    if (error) {
-      console.error('Error fetching spaced repetition cards:', error)
-      throw new Error('Failed to fetch spaced repetition cards')
-    }
-
-    return data as SpacedRepetitionCard[]
-  }
-
-  // Get a single spaced repetition card by ID
-  static async getSpacedRepetitionCard(id: string): Promise<SpacedRepetitionCard | null> {
-    const { data, error } = await supabase
-      .from('spaced_repetition_cards')
-      .select(`
-        *,
-        questions (
-          id,
-          question_text,
-          question_type,
-          options,
-          correct_answer,
-          explanation,
-          difficulty,
-          tags,
-          subjects (
-            id,
-            name,
-            color,
-            icon
-          )
-        )
-      `)
-      .eq('id', id)
-      .single()
-
-    if (error) {
-      console.error('Error fetching spaced repetition card:', error)
-      return null
-    }
-
-    return data as SpacedRepetitionCard
-  }
-
   // Create a new spaced repetition card
-  static async createSpacedRepetitionCard(userId: string, questionId: string): Promise<SpacedRepetitionCard> {
-    const insertData: SpacedRepetitionCardInsert = {
-      user_id: userId,
-      question_id: questionId,
-      ease_factor: this.INITIAL_EASE_FACTOR,
-      interval_days: this.INITIAL_INTERVAL,
-      repetitions: 0,
-      next_review_date: new Date().toISOString()
-    }
-
-    const { data, error } = await supabase
-      .from('spaced_repetition_cards')
-      .insert(insertData)
-      .select(`
-        *,
-        questions (
-          id,
-          question_text,
-          question_type,
-          options,
-          correct_answer,
-          explanation,
-          difficulty,
-          tags,
-          subjects (
-            id,
-            name,
-            color,
-            icon
-          )
-        )
-      `)
-      .single()
-
-    if (error) {
-      console.error('Error creating spaced repetition card:', error)
-      throw new Error('Failed to create spaced repetition card')
-    }
-
-    return data as SpacedRepetitionCard
-  }
-
-  // Update a spaced repetition card
-  static async updateSpacedRepetitionCard(id: string, updates: UpdateSpacedRepetitionCardData): Promise<SpacedRepetitionCard> {
-    const updateData: SpacedRepetitionCardUpdate = {
-      ...updates,
-      updated_at: new Date().toISOString()
-    }
-
-    const { data, error } = await supabase
-      .from('spaced_repetition_cards')
-      .update(updateData)
-      .eq('id', id)
-      .select(`
-        *,
-        questions (
-          id,
-          question_text,
-          question_type,
-          options,
-          correct_answer,
-          explanation,
-          difficulty,
-          tags,
-          subjects (
-            id,
-            name,
-            color,
-            icon
-          )
-        )
-      `)
-      .single()
-
-    if (error) {
-      console.error('Error updating spaced repetition card:', error)
-      throw new Error('Failed to update spaced repetition card')
-    }
-
-    return data as SpacedRepetitionCard
-  }
-
-  // Delete a spaced repetition card
-  static async deleteSpacedRepetitionCard(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('spaced_repetition_cards')
-      .delete()
-      .eq('id', id)
-
-    if (error) {
-      console.error('Error deleting spaced repetition card:', error)
-      throw new Error('Failed to delete spaced repetition card')
-    }
-  }
-
-  // Review a card with SM-2 algorithm
-  static async reviewCard(cardId: string, quality: number): Promise<ReviewResult> {
-    const currentCard = await this.getSpacedRepetitionCard(cardId)
-    if (!currentCard) {
-      throw new Error('Card not found')
-    }
-
-    const sm2Result = this.calculateSM2(
-      currentCard.ease_factor,
-      currentCard.interval_days,
-      currentCard.repetitions,
-      quality
-    )
-
-    // Update the card
-    const updatedCard = await this.updateSpacedRepetitionCard(cardId, {
-      ease_factor: sm2Result.ease_factor,
-      interval_days: sm2Result.interval_days,
-      repetitions: sm2Result.repetitions,
-      next_review_date: sm2Result.next_review_date,
-      last_reviewed_at: new Date().toISOString()
-    })
-
-    // Record the attempt
-    const attemptData: QuestionAttemptInsert = {
-      user_id: currentCard.user_id,
-      question_id: currentCard.question_id,
-      user_answer: quality.toString(),
-      is_correct: quality >= 3,
-      time_spent_seconds: 0,
-      confidence_level: quality
-    }
-
-    await supabase
-      .from('question_attempts')
-      .insert(attemptData)
-
-    return {
-      card: updatedCard,
-      next_review_date: sm2Result.next_review_date,
-      interval_days: sm2Result.interval_days,
-      ease_factor: sm2Result.ease_factor
-    }
-  }
-
-  // SM-2 Algorithm implementation
-  private static calculateSM2(
-    easeFactor: number,
-    interval: number,
-    repetitions: number,
-    quality: number
-  ): {
-    ease_factor: number
-    interval_days: number
-    repetitions: number
-    next_review_date: string
-  } {
-    let newEaseFactor = easeFactor
-    let newInterval = interval
-    let newRepetitions = repetitions
-
-    if (quality >= 3) {
-      if (repetitions === 0) {
-        newInterval = 1
-      } else if (repetitions === 1) {
-        newInterval = 6
-      } else {
-        newInterval = Math.round(interval * easeFactor)
-      }
-      newRepetitions = repetitions + 1
-    } else {
-      newRepetitions = 0
-      newInterval = 1
-    }
-
-    newEaseFactor = easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
-    newEaseFactor = Math.max(newEaseFactor, this.MIN_EASE_FACTOR)
-
+  static async createCard(userId: string, cardData: CreateSpacedRepetitionCardData): Promise<SpacedRepetitionCard> {
     const nextReviewDate = new Date()
-    nextReviewDate.setDate(nextReviewDate.getDate() + newInterval)
+    nextReviewDate.setDate(nextReviewDate.getDate() + INITIAL_INTERVAL)
 
-    return {
-      ease_factor: newEaseFactor,
-      interval_days: newInterval,
-      repetitions: newRepetitions,
-      next_review_date: nextReviewDate.toISOString()
+    const { data, error } = await supabase
+      .from('spaced_repetition_cards')
+      .insert({
+        user_id: userId,
+        question_id: cardData.question_id,
+        ease_factor: INITIAL_EASE_FACTOR,
+        interval_days: INITIAL_INTERVAL,
+        repetitions: 0,
+        next_review_date: nextReviewDate.toISOString(),
+        is_active: true
+      })
+      .select()
+      .single()
+
+    if (error) {
+      throw new Error(`Failed to create spaced repetition card: ${error.message}`)
     }
+
+    return data
   }
 
   // Get cards due for review
   static async getCardsDueForReview(userId: string): Promise<SpacedRepetitionCard[]> {
-    const now = new Date().toISOString()
-    
+    const today = new Date().toISOString().split('T')[0]
+
     const { data, error } = await supabase
       .from('spaced_repetition_cards')
       .select(`
         *,
         questions (
-          id,
           question_text,
-          question_type,
-          options,
           correct_answer,
-          explanation,
-          difficulty,
-          tags,
-          subjects (
-            id,
-            name,
-            color,
-            icon
-          )
+          explanation
         )
       `)
       .eq('user_id', userId)
       .eq('is_active', true)
-      .lte('next_review_date', now)
+      .lte('next_review_date', today)
       .order('next_review_date', { ascending: true })
 
     if (error) {
-      console.error('Error fetching cards due for review:', error)
-      return []
+      throw new Error(`Failed to fetch cards due for review: ${error.message}`)
     }
 
-    return data as SpacedRepetitionCard[]
+    return data || []
+  }
+
+  // Update a card after review
+  static async updateCardAfterReview(cardId: string, quality: number): Promise<ReviewResult> {
+    const { data: card, error: fetchError } = await supabase
+      .from('spaced_repetition_cards')
+      .select('*')
+      .eq('id', cardId)
+      .single()
+
+    if (fetchError) {
+      throw new Error(`Failed to fetch card: ${fetchError.message}`)
+    }
+
+    const isCorrect = quality >= 3
+    const newEaseFactor = this.calculateNewEaseFactor(card.ease_factor, quality)
+    const newInterval = this.calculateNewInterval(card.interval_days, newEaseFactor, card.repetitions, isCorrect)
+    const newRepetitions = isCorrect ? card.repetitions + 1 : 0
+
+    const nextReviewDate = new Date()
+    nextReviewDate.setDate(nextReviewDate.getDate() + newInterval)
+
+    const { data: updatedCard, error: updateError } = await supabase
+      .from('spaced_repetition_cards')
+      .update({
+        ease_factor: newEaseFactor,
+        interval_days: newInterval,
+        repetitions: newRepetitions,
+        next_review_date: nextReviewDate.toISOString(),
+        last_reviewed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', cardId)
+      .select()
+      .single()
+
+    if (updateError) {
+      throw new Error(`Failed to update card: ${updateError.message}`)
+    }
+
+    // Record the attempt
+    await supabase
+      .from('question_attempts')
+      .insert({
+        user_id: card.user_id,
+        question_id: card.question_id,
+        user_answer: isCorrect ? 'correct' : 'incorrect',
+        is_correct: isCorrect,
+        time_spent_seconds: 0,
+        confidence_level: quality
+      })
+
+    return {
+      card_id: cardId,
+      question_id: card.question_id,
+      quality,
+      response_time: 0,
+      is_correct: isCorrect,
+      card: updatedCard
+    }
+  }
+
+  // Calculate new ease factor based on SM-2 algorithm
+  private static calculateNewEaseFactor(currentEaseFactor: number, quality: number): number {
+    const newEaseFactor = currentEaseFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
+    return Math.max(MINIMUM_EASE_FACTOR, Math.min(MAXIMUM_EASE_FACTOR, newEaseFactor))
+  }
+
+  // Calculate new interval based on SM-2 algorithm
+  private static calculateNewInterval(
+    currentInterval: number, 
+    easeFactor: number, 
+    repetitions: number, 
+    isCorrect: boolean
+  ): number {
+    if (!isCorrect) {
+      return 1
+    }
+
+    if (repetitions === 0) {
+      return 1
+    } else if (repetitions === 1) {
+      return 6
+    } else {
+      return Math.round(currentInterval * easeFactor)
+    }
   }
 
   // Get spaced repetition statistics
-  static async getSpacedRepetitionStats(userId: string): Promise<SpacedRepetitionStats> {
-    const [cards, attempts] = await Promise.all([
-      this.getSpacedRepetitionCards(userId),
-      this.getAttempts(userId)
-    ])
-
-    const totalCards = cards?.length || 0
-    const activeCards = cards?.filter(c => c.is_active).length || 0
-    const now = new Date()
-    
-    const cardsDueToday = cards?.filter(c => 
-      c.is_active && new Date(c.next_review_date) <= now
-    ).length || 0
-
-    const overdueCards = cards?.filter(c => 
-      c.is_active && new Date(c.next_review_date) < now
-    ).length || 0
-
-    const averageEaseFactor = activeCards > 0
-      ? cards?.filter(c => c.is_active).reduce((sum, c) => sum + c.ease_factor, 0) / activeCards
-      : 0
-
-    // Calculate recent performance (last 30 days)
-    const thirtyDaysAgo = new Date()
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-
-    const recentAttempts = attempts?.filter(a => 
-      new Date(a.created_at) >= thirtyDaysAgo
-    ) || []
-
-    const recentAccuracy = recentAttempts.length > 0
-      ? (recentAttempts.filter(a => a.is_correct).length / recentAttempts.length) * 100
-      : 0
-
-    // Calculate review streak
-    const sortedAttempts = attempts?.sort((a, b) => 
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    ) || []
-
-    let reviewStreak = 0
-    let currentDate = new Date()
-    
-    for (const attempt of sortedAttempts) {
-      const attemptDate = new Date(attempt.created_at)
-      const daysDiff = Math.floor((currentDate.getTime() - attemptDate.getTime()) / (1000 * 60 * 60 * 24))
-      
-      if (daysDiff <= 1) {
-        reviewStreak++
-        currentDate = attemptDate
-      } else {
-        break
-      }
-    }
-
-    // Calculate daily review count
+  static async getStats(userId: string): Promise<SpacedRepetitionStats> {
     const today = new Date().toISOString().split('T')[0]
-    const reviewsToday = attempts?.filter(a => 
-      a.created_at.startsWith(today)
-    ).length || 0
 
-    return {
-      total_cards: totalCards,
-      active_cards: activeCards,
-      cards_due_today: cardsDueToday,
-      overdue_cards: overdueCards,
-      average_ease_factor: Math.round(averageEaseFactor * 100) / 100,
-      recent_accuracy: Math.round(recentAccuracy),
-      review_streak: reviewStreak,
-      reviews_today: reviewsToday
-    }
-  }
-
-  // Get attempts for a user
-  private static async getAttempts(userId: string): Promise<QuestionAttemptRow[]> {
-    const { data, error } = await supabase
-      .from('question_attempts')
+    const { data: cards, error } = await supabase
+      .from('spaced_repetition_cards')
       .select('*')
       .eq('user_id', userId)
-      .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('Error fetching attempts:', error)
-      return []
+      throw new Error(`Failed to fetch spaced repetition stats: ${error.message}`)
     }
 
-    return data as QuestionAttemptRow[]
+    const cardsList = cards || []
+    const activeCards = cardsList.filter(c => c.is_active)
+    const cardsDueToday = activeCards.filter(c => c.next_review_date <= today).length
+    const overdueCards = activeCards.filter(c => c.next_review_date < today).length
+
+    const averageEaseFactor = activeCards.length > 0 
+      ? activeCards.reduce((sum, c) => sum + c.ease_factor, 0) / activeCards.length 
+      : 0
+
+    return {
+      total_cards: cardsList.length,
+      active_cards: activeCards.length,
+      cards_due_today: cardsDueToday,
+      cards_overdue: overdueCards,
+      average_ease_factor: averageEaseFactor,
+      retention_rate: 0, // Would need to calculate from attempts
+      cards_reviewed_today: 0, // Would need to calculate from today's reviews
+      streak_days: 0 // Would need to track streak
+    }
   }
 
-  // Bulk create cards from questions
-  static async createCardsFromQuestions(userId: string, questionIds: string[]): Promise<SpacedRepetitionCard[]> {
-    const cards = questionIds.map(questionId => ({
+  // Get all cards for a user
+  static async getCards(userId: string): Promise<SpacedRepetitionCard[]> {
+    const { data, error } = await supabase
+      .from('spaced_repetition_cards')
+      .select('*')
+      .eq('user_id', userId)
+      .order('next_review_date', { ascending: true })
+
+    if (error) {
+      throw new Error(`Failed to fetch spaced repetition cards: ${error.message}`)
+    }
+
+    return data || []
+  }
+
+  // Update card
+  static async updateCard(cardId: string, updates: UpdateSpacedRepetitionCardData): Promise<SpacedRepetitionCard> {
+    const { data, error } = await supabase
+      .from('spaced_repetition_cards')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', cardId)
+      .select()
+      .single()
+
+    if (error) {
+      throw new Error(`Failed to update spaced repetition card: ${error.message}`)
+    }
+
+    return data
+  }
+
+  // Delete card
+  static async deleteCard(cardId: string): Promise<void> {
+    const { error } = await supabase
+      .from('spaced_repetition_cards')
+      .delete()
+      .eq('id', cardId)
+
+    if (error) {
+      throw new Error(`Failed to delete spaced repetition card: ${error.message}`)
+    }
+  }
+
+  // Bulk create cards for questions
+  static async bulkCreateCards(userId: string, questionIds: string[]): Promise<SpacedRepetitionCard[]> {
+    const nextReviewDate = new Date()
+    nextReviewDate.setDate(nextReviewDate.getDate() + INITIAL_INTERVAL)
+
+    const cardsData = questionIds.map(questionId => ({
       user_id: userId,
       question_id: questionId,
-      ease_factor: this.INITIAL_EASE_FACTOR,
-      interval_days: this.INITIAL_INTERVAL,
+      ease_factor: INITIAL_EASE_FACTOR,
+      interval_days: INITIAL_INTERVAL,
       repetitions: 0,
-      next_review_date: new Date().toISOString()
+      next_review_date: nextReviewDate.toISOString(),
+      is_active: true
     }))
 
     const { data, error } = await supabase
       .from('spaced_repetition_cards')
-      .insert(cards)
-      .select(`
-        *,
-        questions (
-          id,
-          question_text,
-          question_type,
-          options,
-          correct_answer,
-          explanation,
-          difficulty,
-          tags,
-          subjects (
-            id,
-            name,
-            color,
-            icon
-          )
-        )
-      `)
+      .insert(cardsData)
+      .select()
 
     if (error) {
-      console.error('Error creating cards from questions:', error)
-      throw new Error('Failed to create cards from questions')
+      throw new Error(`Failed to bulk create spaced repetition cards: ${error.message}`)
     }
 
-    return data as SpacedRepetitionCard[]
+    return data || []
   }
 
-  // Reset card progress
-  static async resetCard(cardId: string): Promise<SpacedRepetitionCard> {
-    return this.updateSpacedRepetitionCard(cardId, {
-      ease_factor: this.INITIAL_EASE_FACTOR,
-      interval_days: this.INITIAL_INTERVAL,
-      repetitions: 0,
-      next_review_date: new Date().toISOString(),
-      last_reviewed_at: null
-    })
-  }
-
-  // Suspend a card
+  // Suspend card (mark as inactive)
   static async suspendCard(cardId: string): Promise<SpacedRepetitionCard> {
-    return this.updateSpacedRepetitionCard(cardId, {
-      is_active: false
-    })
-  }
+    const { data, error } = await supabase
+      .from('spaced_repetition_cards')
+      .update({
+        is_active: false,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', cardId)
+      .select()
+      .single()
 
-  // Activate a card
-  static async activateCard(cardId: string): Promise<SpacedRepetitionCard> {
-    return this.updateSpacedRepetitionCard(cardId, {
-      is_active: true
-    })
+    if (error) {
+      throw new Error(`Failed to suspend spaced repetition card: ${error.message}`)
+    }
+
+    return data
   }
 }

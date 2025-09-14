@@ -54,7 +54,7 @@ export function QuestionGenerator() {
     }
   })
 
-  const questionType = watch('question_type')
+  // const questionType = watch('question_type')
 
   const onSubmit = async (data: GeneratorFormData) => {
     setIsGenerating(true)

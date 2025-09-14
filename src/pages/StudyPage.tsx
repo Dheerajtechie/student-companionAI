@@ -4,7 +4,7 @@ import { StudyTimer } from '../components/study/StudyTimer'
 
 export function StudyPage() {
   return (
-    <DashboardLayout>
+    <>
       <Helmet>
         <title>Study - Study Companion</title>
         <meta name="description" content="Start focused study sessions with the Pomodoro timer." />
@@ -20,6 +20,6 @@ export function StudyPage() {
 
         <StudyTimer />
       </div>
-    </DashboardLayout>
+    </>
   )
 }

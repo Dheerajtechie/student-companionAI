@@ -4,7 +4,7 @@ import { SpacedRepetitionReview } from '../components/spaced-repetition/SpacedRe
 
 export function SpacedRepetitionPage() {
   return (
-    <DashboardLayout>
+    <>
       <Helmet>
         <title>Spaced Repetition - Study Companion</title>
         <meta name="description" content="Review flashcards using spaced repetition for better retention." />
@@ -20,6 +20,6 @@ export function SpacedRepetitionPage() {
 
         <SpacedRepetitionReview />
       </div>
-    </DashboardLayout>
+    </>
   )
 }

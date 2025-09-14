@@ -20,7 +20,7 @@ import {
   Brain, 
   Download,
   } from 'lucide-react'
-import { analyticsService } from '../../services/analyticsAdvanced'
+// import { analyticsService } from '../../services/analyticsAdvanced'
 import { LoadingSpinner } from '../common/LoadingSpinner'
 // import { cn } from '../../utils/cn'
 
@@ -30,9 +30,9 @@ export function AnalyticsDashboard() {
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | '1y'>('30d')
   const [isLoading, setIsLoading] = useState(true)
   const [analytics, setAnalytics] = useState<any>(null)
-  const [studyTimeData, setStudyTimeData] = useState([])
-  const [subjectData, setSubjectData] = useState([])
-  const [performanceData, setPerformanceData] = useState([])
+  const [studyTimeData, setStudyTimeData] = useState<{date: string; studyTime: number; questions: number; focus: number}[]>([])
+  const [subjectData, setSubjectData] = useState<{name: string; value: number; color: string}[]>([])
+  const [performanceData, setPerformanceData] = useState<{date: string; accuracy: number; speed: number}[]>([])
 
   useEffect(() => {
     loadAnalytics()

@@ -2,350 +2,250 @@ import { supabase } from './supabase'
 import type { 
   StudySession, 
   CreateStudySessionData, 
-  UpdateStudySessionData, 
+  UpdateStudySessionData,
   StudySessionStats,
   StudySessionAnalytics
 } from '../types/study'
-import type { Database } from '../types/database'
-
-type StudySessionRow = Database['public']['Tables']['study_sessions']['Row']
-type StudySessionInsert = Database['public']['Tables']['study_sessions']['Insert']
-type StudySessionUpdate = Database['public']['Tables']['study_sessions']['Update']
 
 export class StudySessionService {
-  // Get all study sessions for a user
-  static async getStudySessions(userId: string, subjectId?: string): Promise<StudySession[]> {
+  // Create a new study session
+  static async createStudySession(userId: string, sessionData: CreateStudySessionData): Promise<StudySession> {
+    const { data, error } = await supabase
+      .from('study_sessions')
+      .insert({
+        user_id: userId,
+        ...sessionData,
+        status: 'active',
+        started_at: new Date().toISOString()
+      })
+      .select()
+      .single()
+
+    if (error) {
+      throw new Error(`Failed to create study session: ${error.message}`)
+    }
+
+    return data
+  }
+
+  // Get study sessions for a user
+  static async getStudySessions(userId: string, limit?: number): Promise<StudySession[]> {
     let query = supabase
       .from('study_sessions')
-      .select(`
-        *,
-        subjects (
-          id,
-          name,
-          color,
-          icon
-        )
-      `)
+      .select('*')
       .eq('user_id', userId)
-      .order('started_at', { ascending: false })
+      .order('created_at', { ascending: false })
 
-    if (subjectId) {
-      query = query.eq('subject_id', subjectId)
+    if (limit) {
+      query = query.limit(limit)
     }
 
     const { data, error } = await query
 
     if (error) {
-      console.error('Error fetching study sessions:', error)
-      throw new Error('Failed to fetch study sessions')
+      throw new Error(`Failed to fetch study sessions: ${error.message}`)
     }
 
-    return data as StudySession[]
-  }
-
-  // Get a single study session by ID
-  static async getStudySession(id: string): Promise<StudySession | null> {
-    const { data, error } = await supabase
-      .from('study_sessions')
-      .select(`
-        *,
-        subjects (
-          id,
-          name,
-          color,
-          icon
-        )
-      `)
-      .eq('id', id)
-      .single()
-
-    if (error) {
-      console.error('Error fetching study session:', error)
-      return null
-    }
-
-    return data as StudySession
-  }
-
-  // Create a new study session
-  static async createStudySession(userId: string, sessionData: CreateStudySessionData): Promise<StudySession> {
-    const insertData: StudySessionInsert = {
-      user_id: userId,
-      subject_id: sessionData.subject_id,
-      title: sessionData.title,
-      description: sessionData.description,
-      duration_minutes: sessionData.duration_minutes,
-      focus_rating: sessionData.focus_rating,
-      notes: sessionData.notes,
-      status: sessionData.status,
-      started_at: sessionData.started_at
-    }
-
-    const { data, error } = await supabase
-      .from('study_sessions')
-      .insert(insertData)
-      .select(`
-        *,
-        subjects (
-          id,
-          name,
-          color,
-          icon
-        )
-      `)
-      .single()
-
-    if (error) {
-      console.error('Error creating study session:', error)
-      throw new Error('Failed to create study session')
-    }
-
-    return data as StudySession
+    return data || []
   }
 
   // Update a study session
-  static async updateStudySession(id: string, updates: UpdateStudySessionData): Promise<StudySession> {
-    const updateData: StudySessionUpdate = {
-      ...updates,
-      updated_at: new Date().toISOString()
-    }
-
+  static async updateStudySession(sessionId: string, updates: UpdateStudySessionData): Promise<StudySession> {
     const { data, error } = await supabase
       .from('study_sessions')
-      .update(updateData)
-      .eq('id', id)
-      .select(`
-        *,
-        subjects (
-          id,
-          name,
-          color,
-          icon
-        )
-      `)
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', sessionId)
+      .select()
       .single()
 
     if (error) {
-      console.error('Error updating study session:', error)
-      throw new Error('Failed to update study session')
+      throw new Error(`Failed to update study session: ${error.message}`)
     }
 
-    return data as StudySession
+    return data
+  }
+
+  // Complete a study session
+  static async completeStudySession(sessionId: string): Promise<StudySession> {
+    const { data, error } = await supabase
+      .from('study_sessions')
+      .update({
+        status: 'completed',
+        ended_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', sessionId)
+      .select()
+      .single()
+
+    if (error) {
+      throw new Error(`Failed to complete study session: ${error.message}`)
+    }
+
+    return data
   }
 
   // Delete a study session
-  static async deleteStudySession(id: string): Promise<void> {
+  static async deleteStudySession(sessionId: string): Promise<void> {
     const { error } = await supabase
       .from('study_sessions')
       .delete()
-      .eq('id', id)
+      .eq('id', sessionId)
 
     if (error) {
-      console.error('Error deleting study session:', error)
-      throw new Error('Failed to delete study session')
+      throw new Error(`Failed to delete study session: ${error.message}`)
     }
-  }
-
-  // Start a study session
-  static async startStudySession(userId: string, subjectId: string, title: string): Promise<StudySession> {
-    return this.createStudySession(userId, {
-      subject_id: subjectId,
-      title,
-      description: null,
-      duration_minutes: 0,
-      focus_rating: null,
-      notes: null,
-      status: 'active',
-      started_at: new Date().toISOString()
-    })
-  }
-
-  // End a study session
-  static async endStudySession(id: string, durationMinutes: number, focusRating?: number, notes?: string): Promise<StudySession> {
-    return this.updateStudySession(id, {
-      status: 'completed',
-      duration_minutes: durationMinutes,
-      focus_rating: focusRating,
-      notes,
-      ended_at: new Date().toISOString()
-    })
-  }
-
-  // Pause a study session
-  static async pauseStudySession(id: string): Promise<StudySession> {
-    return this.updateStudySession(id, {
-      status: 'paused'
-    })
-  }
-
-  // Resume a study session
-  static async resumeStudySession(id: string): Promise<StudySession> {
-    return this.updateStudySession(id, {
-      status: 'active'
-    })
   }
 
   // Get study session statistics
   static async getStudySessionStats(userId: string): Promise<StudySessionStats> {
-    const sessions = await this.getStudySessions(userId)
-    
-    const totalSessions = sessions?.length || 0
-    const totalStudyTime = sessions?.reduce((sum, s) => sum + s.duration_minutes, 0) || 0
-    const averageSessionLength = totalSessions > 0 ? totalStudyTime / totalSessions : 0
-    
-    const focusRatings = sessions?.filter(s => s.focus_rating).map(s => s.focus_rating!) || []
+    const { data: sessions, error } = await supabase
+      .from('study_sessions')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('status', 'completed')
+
+    if (error) {
+      throw new Error(`Failed to fetch study session stats: ${error.message}`)
+    }
+
+    const sessionsList = sessions || []
+    const totalSessions = sessionsList.length
+    const totalStudyTime = sessionsList.reduce((sum, s) => sum + (s.duration_minutes || 0), 0)
+    const averageSessionDuration = totalSessions > 0 ? totalStudyTime / totalSessions : 0
+
+    const focusRatings = sessionsList.filter(s => s.focus_rating).map(s => s.focus_rating!)
     const averageFocusRating = focusRatings.length > 0 
       ? focusRatings.reduce((sum, rating) => sum + rating, 0) / focusRatings.length 
       : 0
 
+    // Calculate today's sessions
     const today = new Date().toISOString().split('T')[0]
-    const sessionsToday = sessions?.filter(s => s.started_at.startsWith(today)) || []
-    const studyTimeToday = sessionsToday.reduce((sum, s) => sum + s.duration_minutes, 0)
-
-    const recentSessions = sessions?.sort((a, b) => 
-      new Date(b.started_at).getTime() - new Date(a.started_at).getTime()
-    ).slice(0, 5) || []
+    const sessionsToday = sessionsList.filter(s => s.started_at.startsWith(today))
+    const studyTimeToday = sessionsToday.reduce((sum, s) => sum + (s.duration_minutes || 0), 0)
 
     return {
       total_sessions: totalSessions,
       total_study_time: totalStudyTime,
-      average_session_length: Math.round(averageSessionLength),
-      average_focus_rating: Math.round(averageFocusRating * 10) / 10,
+      average_session_duration: averageSessionDuration,
+      average_focus_rating: averageFocusRating,
       sessions_today: sessionsToday.length,
       study_time_today: studyTimeToday,
-      recent_sessions: recentSessions
+      longest_streak: 0, // Would need to calculate from daily sessions
+      current_streak: 0, // Would need to calculate from daily sessions
+      average_session_length: averageSessionDuration
     }
   }
 
   // Get study session analytics
-  static async getStudySessionAnalytics(userId: string, days: number = 30): Promise<StudySessionAnalytics> {
-    const sessions = await this.getStudySessions(userId)
-    const cutoffDate = new Date()
-    cutoffDate.setDate(cutoffDate.getDate() - days)
-    
-    const recentSessions = sessions?.filter(s => 
-      new Date(s.started_at) >= cutoffDate
-    ) || []
+  static async getStudySessionAnalytics(userId: string): Promise<StudySessionAnalytics> {
+    const { data: sessions, error } = await supabase
+      .from('study_sessions')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('status', 'completed')
 
-    // Daily study time
-    const dailyStudyTime = recentSessions.reduce((acc, session) => {
-      const sessionDate = session.started_at.split('T')[0]
-      acc[sessionDate] = (acc[sessionDate] || 0) + session.duration_minutes
+    if (error) {
+      throw new Error(`Failed to fetch study session analytics: ${error.message}`)
+    }
+
+    const sessionsList = sessions || []
+
+    // Group sessions by hour
+    const sessionsByHour = Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      count: sessionsList.filter(s => new Date(s.started_at).getHours() === hour).length
+    }))
+
+    // Group sessions by day
+    const sessionsByDay = sessionsList.reduce((acc, session) => {
+      const date = session.started_at.split('T')[0]
+      const existing = acc.find(item => item.date === date)
+      if (existing) {
+        existing.count++
+        existing.duration += session.duration_minutes || 0
+      } else {
+        acc.push({
+          date,
+          count: 1,
+          duration: session.duration_minutes || 0
+        })
+      }
       return acc
-    }, {} as Record<string, number>)
+    }, [] as { date: string; count: number; duration: number }[])
 
-    // Subject-wise study time
-    const subjectStudyTime = recentSessions.reduce((acc, session) => {
-      const subjectName = session.subjects?.name || 'Unknown'
-      acc[subjectName] = (acc[subjectName] || 0) + session.duration_minutes
-      return acc
-    }, {} as Record<string, number>)
-
-    // Weekly study time
-    const weeklyStudyTime = recentSessions.reduce((acc, session) => {
-      const weekStart = new Date(session.started_at)
-      weekStart.setDate(weekStart.getDate() - weekStart.getDay())
-      const weekKey = weekStart.toISOString().split('T')[0]
-      acc[weekKey] = (acc[weekKey] || 0) + session.duration_minutes
-      return acc
-    }, {} as Record<string, number>)
-
-    // Hourly study patterns
-    const hourlyStudyTime = recentSessions.reduce((acc, session) => {
-      const hour = new Date(session.started_at).getHours()
-      hourlyData[hour] = (hourlyData[hour] || 0) + session.duration_minutes
-      return acc
-    }, {} as Record<number, number>)
-
-    // Focus rating trends
-    const focusTrends = recentSessions
+    // Focus trends
+    const focusTrends = sessionsList
       .filter(s => s.focus_rating)
       .map(s => ({
         date: s.started_at.split('T')[0],
-        focus_rating: s.focus_rating!,
-        duration: s.duration_minutes
+        rating: s.focus_rating!
       }))
 
+    // Calculate productivity score
+    const totalTime = sessionsList.reduce((sum, s) => sum + (s.duration_minutes || 0), 0)
+    const averageFocus = focusTrends.length > 0 
+      ? focusTrends.reduce((sum, t) => sum + t.rating, 0) / focusTrends.length 
+      : 0
+    const productivityScore = Math.round((averageFocus / 5) * 100)
+
     return {
-      daily_study_time: dailyStudyTime,
-      subject_study_time: subjectStudyTime,
-      weekly_study_time: weeklyStudyTime,
-      hourly_study_time: hourlyStudyTime,
+      sessions_by_hour: sessionsByHour,
+      sessions_by_day: sessionsByDay,
       focus_trends: focusTrends,
-      total_study_time: recentSessions.reduce((sum, s) => sum + s.duration_minutes, 0),
-      average_daily_study_time: Math.round(
-        recentSessions.reduce((sum, s) => sum + s.duration_minutes, 0) / days
-      )
+      productivity_score: productivityScore
     }
   }
 
-  // Get study streaks
-  static async getStudyStreaks(userId: string): Promise<{ current: number; longest: number }> {
-    const sessions = await this.getStudySessions(userId)
-    const studyDays = new Set(
-      sessions?.map(s => s.started_at.split('T')[0]) || []
-    )
+  // Get study sessions by subject
+  static async getStudySessionsBySubject(userId: string, subjectId: string): Promise<StudySession[]> {
+    const { data, error } = await supabase
+      .from('study_sessions')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('subject_id', subjectId)
+      .order('created_at', { ascending: false })
 
-    const sortedDays = Array.from(studyDays).sort().reverse()
-    let currentStreak = 0
-    let longestStreak = 0
-    let tempStreak = 0
-
-    for (let i = 0; i < sortedDays.length; i++) {
-      const currentDay = new Date(sortedDays[i])
-      const previousDay = i > 0 ? new Date(sortedDays[i - 1]) : null
-
-      if (i === 0 || (previousDay && currentDay.getTime() - previousDay.getTime() === 24 * 60 * 60 * 1000)) {
-        tempStreak++
-        if (i === 0) currentStreak = tempStreak
-      } else {
-        longestStreak = Math.max(longestStreak, tempStreak)
-        tempStreak = 1
-        if (i === 0) currentStreak = tempStreak
-      }
+    if (error) {
+      throw new Error(`Failed to fetch study sessions by subject: ${error.message}`)
     }
 
-    longestStreak = Math.max(longestStreak, tempStreak)
-
-    return {
-      current: currentStreak,
-      longest: longestStreak
-    }
+    return data || []
   }
 
-  // Get study goals progress
-  static async getStudyGoalsProgress(userId: string): Promise<{
-    daily_goal: { target: number; current: number; percentage: number }
-    weekly_goal: { target: number; current: number; percentage: number }
-  }> {
-    const today = new Date().toISOString().split('T')[0]
-    const weekStart = new Date()
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay())
-    const weekStartStr = weekStart.toISOString().split('T')[0]
+  // Get study sessions by date range
+  static async getStudySessionsByDateRange(
+    userId: string, 
+    startDate: string, 
+    endDate: string
+  ): Promise<StudySession[]> {
+    const { data, error } = await supabase
+      .from('study_sessions')
+      .select('*')
+      .eq('user_id', userId)
+      .gte('started_at', startDate)
+      .lte('started_at', endDate)
+      .order('started_at', { ascending: false })
 
-    const sessions = await this.getStudySessions(userId)
-    
-    const todaySessions = sessions?.filter(s => s.started_at.startsWith(today)) || []
-    const weekSessions = sessions?.filter(s => s.started_at >= weekStartStr) || []
-
-    const dailyStudyTime = todaySessions.reduce((sum, s) => sum + s.duration_minutes, 0)
-    const weeklyStudyTime = weekSessions.reduce((sum, s) => sum + s.duration_minutes, 0)
-
-    // Default goals (can be made configurable)
-    const dailyGoal = 120 // 2 hours
-    const weeklyGoal = 840 // 14 hours
-
-    return {
-      daily_goal: {
-        target: dailyGoal,
-        current: dailyStudyTime,
-        percentage: Math.min((dailyStudyTime / dailyGoal) * 100, 100)
-      },
-      weekly_goal: {
-        target: weeklyGoal,
-        current: weeklyStudyTime,
-        percentage: Math.min((weeklyStudyTime / weeklyGoal) * 100, 100)
-      }
+    if (error) {
+      throw new Error(`Failed to fetch study sessions by date range: ${error.message}`)
     }
+
+    return data || []
+  }
+
+  // Get most productive hours
+  static async getMostProductiveHours(userId: string): Promise<{ hour: number; count: number }[]> {
+    const analytics = await this.getStudySessionAnalytics(userId)
+    return analytics.sessions_by_hour.sort((a, b) => b.count - a.count)
+  }
+
+  // Get most productive days
+  static async getMostProductiveDays(userId: string): Promise<{ date: string; count: number; duration: number }[]> {
+    const analytics = await this.getStudySessionAnalytics(userId)
+    return analytics.sessions_by_day.sort((a, b) => b.duration - a.duration)
   }
 }

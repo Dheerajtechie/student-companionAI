@@ -98,3 +98,14 @@ export interface GoalTemplate {
   category: string
   difficulty: 'beginner' | 'intermediate' | 'advanced'
 }
+
+export interface GoalFilters {
+  status?: GoalStatus
+  goal_type?: GoalType
+  priority?: PriorityLevel
+  subject_id?: string
+  date_range?: {
+    start: string
+    end: string
+  }
+}

@@ -24,11 +24,11 @@ export function GoalList() {
   const [showFilters, setShowFilters] = useState(false)
 
   useEffect(() => {
-    fetchGoals(filters)
+    fetchGoals()
   }, [fetchGoals, filters])
 
   const filteredGoals = goals.filter(goal => {
-    const matchesSearch = goal.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    const matchesSearch = goal.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          (goal.description && goal.description.toLowerCase().includes(searchQuery.toLowerCase()))
     return matchesSearch
   })
@@ -39,7 +39,7 @@ export function GoalList() {
   }
 
   const handleDelete = async (goal: Goal) => {
-    if (window.confirm(`Are you sure you want to delete "${goal.name}"? This action cannot be undone.`)) {
+    if (window.confirm(`Are you sure you want to delete "${goal.title}"? This action cannot be undone.`)) {
       try {
         await deleteGoal(goal.id)
       } catch (error) {
@@ -56,10 +56,10 @@ export function GoalList() {
   // Calculate goal statistics
   const totalGoals = goals.length
   const completedGoals = goals.filter(g => g.status === 'completed').length
-  const inProgressGoals = goals.filter(g => g.status === 'in_progress').length
+  const inProgressGoals = goals.filter(g => g.status === 'active').length
   const overdueGoals = goals.filter(g => {
-    if (!g.due_date || g.status === 'completed') return false
-    return new Date(g.due_date) < new Date()
+    if (!g.deadline || g.status === 'completed') return false
+    return new Date(g.deadline) < new Date()
   }).length
 
   if (error) {

@@ -40,6 +40,11 @@ export interface SubjectStats {
   total_study_hours: number
   average_difficulty: number
   completion_rate: number
+  subjects_by_difficulty: {
+    beginner: number
+    intermediate: number
+    advanced: number
+  }
 }
 
 export interface SubjectProgress {
@@ -50,4 +55,5 @@ export interface SubjectProgress {
   progress_percentage: number
   sessions_count: number
   last_studied: string | null
+  is_on_track: boolean
 }

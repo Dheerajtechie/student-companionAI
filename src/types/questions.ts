@@ -38,6 +38,18 @@ export interface CreateQuestionData {
   explanation?: string
   difficulty?: DifficultyLevel
   tags?: string[]
+  is_ai_generated?: boolean
+  ai_provider?: string
+}
+
+export interface UpdateQuestionData {
+  question_text?: string
+  question_type?: QuestionType
+  options?: string[]
+  correct_answer?: string
+  explanation?: string
+  difficulty?: DifficultyLevel
+  tags?: string[]
 }
 
 export interface GenerateQuestionsRequest {

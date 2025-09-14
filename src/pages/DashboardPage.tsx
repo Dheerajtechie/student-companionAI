@@ -140,7 +140,7 @@ export function DashboardPage() {
   }
 
   return (
-    <DashboardLayout>
+    <>
       <Helmet>
         <title>Dashboard - Study Companion</title>
         <meta name="description" content="Your personalized study dashboard with insights and progress tracking." />
@@ -354,6 +354,6 @@ export function DashboardPage() {
           </div>
         </div>
       </div>
-    </DashboardLayout>
+    </>
   )
 }

@@ -307,7 +307,7 @@ export function SpacedRepetitionReview() {
 
         <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-6 mb-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            {currentCard.front_text}
+            {currentCard.front_text || 'Front of card'}
           </h3>
           
           {!showAnswer ? (
@@ -324,7 +324,7 @@ export function SpacedRepetitionReview() {
                   Answer:
                 </h4>
                 <p className="text-gray-900 dark:text-white">
-                  {currentCard.back_text}
+                  {currentCard.back_text || 'Back of card'}
                 </p>
               </div>
 

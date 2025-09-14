@@ -51,22 +51,22 @@ export function QuestionBank() {
     }
   }
 
-  const getQuestionTypeIcon = (type: string) => {
-    switch (type) {
-      case 'multiple_choice':
-        return <CheckCircle className="h-4 w-4" />
-      case 'short_answer':
-        return <Edit className="h-4 w-4" />
-      case 'essay':
-        return <Edit className="h-4 w-4" />
-      case 'true_false':
-        return <XCircle className="h-4 w-4" />
-      case 'fill_blank':
-        return <Edit className="h-4 w-4" />
-      default:
-        return <Edit className="h-4 w-4" />
-    }
-  }
+  // const getQuestionTypeIcon = (type: string) => {
+  //   switch (type) {
+  //     case 'multiple_choice':
+  //       return <CheckCircle className="h-4 w-4" />
+  //     case 'short_answer':
+  //       return <Edit className="h-4 w-4" />
+  //     case 'essay':
+  //       return <Edit className="h-4 w-4" />
+  //     case 'true_false':
+  //       return <XCircle className="h-4 w-4" />
+  //     case 'fill_blank':
+  //       return <Edit className="h-4 w-4" />
+  //     default:
+  //       return <Edit className="h-4 w-4" />
+  //   }
+  // }
 
   const getQuestionTypeLabel = (type: string) => {
     switch (type) {

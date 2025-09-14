@@ -4,7 +4,7 @@ import { Settings } from 'lucide-react'
 
 export function SettingsPage() {
   return (
-    <DashboardLayout>
+    <>
       <Helmet>
         <title>Settings - Study Companion</title>
         <meta name="description" content="Customize your Study Companion experience." />
@@ -28,6 +28,6 @@ export function SettingsPage() {
           </p>
         </div>
       </div>
-    </DashboardLayout>
+    </>
   )
 }

@@ -4,7 +4,7 @@ import { User } from 'lucide-react'
 
 export function ProfilePage() {
   return (
-    <DashboardLayout>
+    <>
       <Helmet>
         <title>Profile - Study Companion</title>
         <meta name="description" content="Manage your profile and account settings." />
@@ -28,6 +28,6 @@ export function ProfilePage() {
           </p>
         </div>
       </div>
-    </DashboardLayout>
+    </>
   )
 }

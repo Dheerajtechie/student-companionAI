@@ -64,6 +64,14 @@ export interface StudySessionStats {
   study_time_today: number
   longest_streak: number
   current_streak: number
+  average_session_length: number
+}
+
+export interface StudySessionAnalytics {
+  sessions_by_hour: { hour: number; count: number }[]
+  sessions_by_day: { date: string; count: number; duration: number }[]
+  focus_trends: { date: string; rating: number }[]
+  productivity_score: number
 }
 
 export interface StudyPlan {

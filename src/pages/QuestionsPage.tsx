@@ -9,7 +9,7 @@ export function QuestionsPage() {
   const [activeTab, setActiveTab] = useState<'generate' | 'bank'>('generate')
 
   return (
-    <DashboardLayout>
+    <>
       <Helmet>
         <title>Questions - Study Companion</title>
         <meta name="description" content="Practice with AI-generated questions and test your knowledge." />
@@ -54,6 +54,6 @@ export function QuestionsPage() {
         {/* Tab Content */}
         {activeTab === 'generate' ? <QuestionGenerator /> : <QuestionBank />}
       </div>
-    </DashboardLayout>
+    </>
   )
 }

@@ -2,314 +2,251 @@ import { supabase } from './supabase'
 import type { 
   Subject, 
   CreateSubjectData, 
-  UpdateSubjectData, 
+  UpdateSubjectData,
   SubjectStats,
   SubjectProgress
 } from '../types/subjects'
-import type { Database } from '../types/database'
-
-type SubjectRow = Database['public']['Tables']['subjects']['Row']
-type SubjectInsert = Database['public']['Tables']['subjects']['Insert']
-type SubjectUpdate = Database['public']['Tables']['subjects']['Update']
 
 export class SubjectService {
-  // Get all subjects for a user
+  // Create a new subject
+  static async createSubject(userId: string, subjectData: CreateSubjectData): Promise<Subject> {
+    const { data, error } = await supabase
+      .from('subjects')
+      .insert({
+        user_id: userId,
+        ...subjectData,
+        color: subjectData.color || '#3B82F6',
+        icon: subjectData.icon || '📚',
+        difficulty: subjectData.difficulty || 'beginner',
+        target_hours: subjectData.target_hours || 0,
+        completed_hours: 0,
+        is_active: true
+      })
+      .select()
+      .single()
+
+    if (error) {
+      throw new Error(`Failed to create subject: ${error.message}`)
+    }
+
+    return data
+  }
+
+  // Get subjects for a user
   static async getSubjects(userId: string): Promise<Subject[]> {
     const { data, error } = await supabase
       .from('subjects')
-      .select(`
-        *,
-        study_sessions (
-          id,
-          title,
-          duration_minutes,
-          started_at,
-          status
-        )
-      `)
+      .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('Error fetching subjects:', error)
-      throw new Error('Failed to fetch subjects')
+      throw new Error(`Failed to fetch subjects: ${error.message}`)
     }
 
-    return data as Subject[]
+    return data || []
   }
 
-  // Get a single subject by ID
-  static async getSubject(id: string): Promise<Subject | null> {
+  // Get active subjects for a user
+  static async getActiveSubjects(userId: string): Promise<Subject[]> {
     const { data, error } = await supabase
       .from('subjects')
-      .select(`
-        *,
-        study_sessions (
-          id,
-          title,
-          duration_minutes,
-          started_at,
-          status
-        )
-      `)
-      .eq('id', id)
-      .single()
+      .select('*')
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .order('name', { ascending: true })
 
     if (error) {
-      console.error('Error fetching subject:', error)
-      return null
+      throw new Error(`Failed to fetch active subjects: ${error.message}`)
     }
 
-    return data as Subject
-  }
-
-  // Create a new subject
-  static async createSubject(userId: string, subjectData: CreateSubjectData): Promise<Subject> {
-    const insertData: SubjectInsert = {
-      user_id: userId,
-      name: subjectData.name,
-      description: subjectData.description,
-      color: subjectData.color,
-      icon: subjectData.icon,
-      difficulty: subjectData.difficulty,
-      target_hours: subjectData.target_hours
-    }
-
-    const { data, error } = await supabase
-      .from('subjects')
-      .insert(insertData)
-      .select(`
-        *,
-        study_sessions (
-          id,
-          title,
-          duration_minutes,
-          started_at,
-          status
-        )
-      `)
-      .single()
-
-    if (error) {
-      console.error('Error creating subject:', error)
-      throw new Error('Failed to create subject')
-    }
-
-    return data as Subject
+    return data || []
   }
 
   // Update a subject
-  static async updateSubject(id: string, updates: UpdateSubjectData): Promise<Subject> {
-    const updateData: SubjectUpdate = {
-      ...updates,
-      updated_at: new Date().toISOString()
-    }
-
+  static async updateSubject(subjectId: string, updates: UpdateSubjectData): Promise<Subject> {
     const { data, error } = await supabase
       .from('subjects')
-      .update(updateData)
-      .eq('id', id)
-      .select(`
-        *,
-        study_sessions (
-          id,
-          title,
-          duration_minutes,
-          started_at,
-          status
-        )
-      `)
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', subjectId)
+      .select()
       .single()
 
     if (error) {
-      console.error('Error updating subject:', error)
-      throw new Error('Failed to update subject')
+      throw new Error(`Failed to update subject: ${error.message}`)
     }
 
-    return data as Subject
+    return data
   }
 
   // Delete a subject
-  static async deleteSubject(id: string): Promise<void> {
+  static async deleteSubject(subjectId: string): Promise<void> {
     const { error } = await supabase
       .from('subjects')
       .delete()
-      .eq('id', id)
+      .eq('id', subjectId)
 
     if (error) {
-      console.error('Error deleting subject:', error)
-      throw new Error('Failed to delete subject')
+      throw new Error(`Failed to delete subject: ${error.message}`)
     }
   }
 
-  // Update subject study hours
-  static async updateStudyHours(id: string, additionalHours: number): Promise<Subject> {
-    const subject = await this.getSubject(id)
-    if (!subject) {
-      throw new Error('Subject not found')
+  // Update subject progress
+  static async updateSubjectProgress(subjectId: string, additionalHours: number): Promise<Subject> {
+    const { data: subject, error: fetchError } = await supabase
+      .from('subjects')
+      .select('*')
+      .eq('id', subjectId)
+      .single()
+
+    if (fetchError) {
+      throw new Error(`Failed to fetch subject: ${fetchError.message}`)
     }
 
-    const newCompletedHours = subject.completed_hours + additionalHours
-    return this.updateSubject(id, {
-      completed_hours: newCompletedHours
-    })
+    const newCompletedHours = (subject.completed_hours || 0) + additionalHours
+
+    const { data, error } = await supabase
+      .from('subjects')
+      .update({
+        completed_hours: newCompletedHours,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', subjectId)
+      .select()
+      .single()
+
+    if (error) {
+      throw new Error(`Failed to update subject progress: ${error.message}`)
+    }
+
+    return data
   }
 
   // Get subject statistics
   static async getSubjectStats(userId: string): Promise<SubjectStats> {
-    const subjects = await this.getSubjects(userId)
-    
-    const totalSubjects = subjects?.length || 0
-    const activeSubjects = subjects?.filter(s => s.is_active).length || 0
-    const totalStudyHours = subjects?.reduce((sum, s) => sum + s.completed_hours, 0) || 0
+    const { data: subjects, error } = await supabase
+      .from('subjects')
+      .select('*')
+      .eq('user_id', userId)
 
-    const subjectsByDifficulty = subjects?.reduce((acc, s) => {
-      acc[s.difficulty] = (acc[s.difficulty] || 0) + 1
-      return acc
-    }, {} as Record<string, number>) || {}
+    if (error) {
+      throw new Error(`Failed to fetch subject stats: ${error.message}`)
+    }
 
-    const completionRate = totalSubjects > 0
-      ? subjects?.filter(s => s.completed_hours >= s.target_hours).length / totalSubjects * 100
+    const subjectsList = subjects || []
+    const totalSubjects = subjectsList.length
+    const activeSubjects = subjectsList.filter(s => s.is_active).length
+    const totalStudyHours = subjectsList.reduce((sum, s) => sum + (s.completed_hours || 0), 0)
+
+    const difficultyValues = { beginner: 1, intermediate: 2, advanced: 3 }
+    const averageDifficulty = totalSubjects > 0 
+      ? subjectsList.reduce((sum, s) => sum + difficultyValues[s.difficulty], 0) / totalSubjects 
       : 0
 
-    const averageProgress = totalSubjects > 0
-      ? subjects?.reduce((sum, s) => {
-          const progress = s.target_hours > 0 ? (s.completed_hours / s.target_hours) * 100 : 0
-          return sum + progress
-        }, 0) / totalSubjects
+    const completionRate = totalSubjects > 0 
+      ? subjectsList.filter(s => s.completed_hours >= s.target_hours).length / totalSubjects 
       : 0
 
     return {
       total_subjects: totalSubjects,
       active_subjects: activeSubjects,
       total_study_hours: totalStudyHours,
-      subjects_by_difficulty: subjectsByDifficulty,
-      completion_rate: Math.round(completionRate),
-      average_progress: Math.round(averageProgress)
+      average_difficulty: averageDifficulty,
+      completion_rate: completionRate,
+      subjects_by_difficulty: {
+        beginner: subjectsList.filter(s => s.difficulty === 'beginner').length,
+        intermediate: subjectsList.filter(s => s.difficulty === 'intermediate').length,
+        advanced: subjectsList.filter(s => s.difficulty === 'advanced').length
+      }
     }
   }
 
-  // Get subject progress details
-  static async getSubjectProgress(userId: string, subjectId?: string): Promise<SubjectProgress[]> {
-    const subjects = await this.getSubjects(userId)
-    const filteredSubjects = subjectId 
-      ? subjects?.filter(s => s.id === subjectId) 
-      : subjects
+  // Get subject progress
+  static async getSubjectProgress(userId: string): Promise<SubjectProgress[]> {
+    const { data: subjects, error } = await supabase
+      .from('subjects')
+      .select(`
+        *,
+        study_sessions (
+          id,
+          started_at,
+          duration_minutes
+        )
+      `)
+      .eq('user_id', userId)
+      .eq('is_active', true)
 
-    if (!filteredSubjects) return []
+    if (error) {
+      throw new Error(`Failed to fetch subject progress: ${error.message}`)
+    }
 
-    return filteredSubjects.map(subject => {
+    return (subjects || []).map(subject => {
       const sessions = subject.study_sessions || []
-      const lastStudyDate = sessions.length > 0
+      const sessionsCount = sessions.length
+      const lastStudied = sessions.length > 0 
         ? sessions.sort((a: any, b: any) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())[0].started_at
         : null
 
-      const progressPercentage = subject.target_hours > 0
-        ? Math.min((subject.completed_hours / subject.target_hours) * 100, 100)
+      const progressPercentage = subject.target_hours > 0 
+        ? Math.round((subject.completed_hours / subject.target_hours) * 100)
         : 0
+
+      const isOnTrack = progressPercentage >= 80 || (subject.target_hours === 0 && subject.completed_hours > 0)
 
       return {
         subject_id: subject.id,
         subject_name: subject.name,
         target_hours: subject.target_hours,
         completed_hours: subject.completed_hours,
-        progress_percentage: Math.round(progressPercentage),
-        last_study_date: lastStudyDate,
-        is_on_track: progressPercentage >= 80,
-        created_at: subject.created_at
+        progress_percentage: progressPercentage,
+        sessions_count: sessionsCount,
+        last_studied: lastStudied,
+        is_on_track: isOnTrack
       }
     })
   }
 
-  // Search subjects
-  static async searchSubjects(userId: string, searchTerm: string): Promise<Subject[]> {
-    const { data, error } = await supabase
-      .from('subjects')
-      .select(`
-        *,
-        study_sessions (
-          id,
-          title,
-          duration_minutes,
-          started_at,
-          status
-        )
-      `)
-      .eq('user_id', userId)
-      .or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      console.error('Error searching subjects:', error)
-      return []
-    }
-
-    return data as Subject[]
+  // Bulk update subjects
+  static async bulkUpdateSubjects(updates: { id: string; updates: UpdateSubjectData }[]): Promise<Subject[]> {
+    const results = await Promise.all(
+      updates.map(({ id, updates }) => this.updateSubject(id, updates))
+    )
+    return results
   }
 
   // Get subjects by difficulty
   static async getSubjectsByDifficulty(userId: string, difficulty: 'beginner' | 'intermediate' | 'advanced'): Promise<Subject[]> {
     const { data, error } = await supabase
       .from('subjects')
-      .select(`
-        *,
-        study_sessions (
-          id,
-          title,
-          duration_minutes,
-          started_at,
-          status
-        )
-      `)
+      .select('*')
       .eq('user_id', userId)
       .eq('difficulty', difficulty)
-      .order('created_at', { ascending: false })
+      .eq('is_active', true)
+      .order('name', { ascending: true })
 
     if (error) {
-      console.error('Error fetching subjects by difficulty:', error)
-      return []
+      throw new Error(`Failed to fetch subjects by difficulty: ${error.message}`)
     }
 
-    return data as Subject[]
+    return data || []
   }
 
-  // Get active subjects
-  static async getActiveSubjects(userId: string): Promise<Subject[]> {
+  // Search subjects
+  static async searchSubjects(userId: string, query: string): Promise<Subject[]> {
     const { data, error } = await supabase
       .from('subjects')
-      .select(`
-        *,
-        study_sessions (
-          id,
-          title,
-          duration_minutes,
-          started_at,
-          status
-        )
-      `)
+      .select('*')
       .eq('user_id', userId)
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
+      .ilike('name', `%${query}%`)
+      .order('name', { ascending: true })
 
     if (error) {
-      console.error('Error fetching active subjects:', error)
-      return []
+      throw new Error(`Failed to search subjects: ${error.message}`)
     }
 
-    return data as Subject[]
-  }
-
-  // Archive a subject
-  static async archiveSubject(id: string): Promise<Subject> {
-    return this.updateSubject(id, {
-      is_active: false
-    })
-  }
-
-  // Restore a subject
-  static async restoreSubject(id: string): Promise<Subject> {
-    return this.updateSubject(id, {
-      is_active: true
-    })
+    return data || []
   }
 }

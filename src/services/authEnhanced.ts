@@ -298,15 +298,6 @@ export class EnhancedAuthService {
     }
   }
 
-  // Auth state change subscription
-  static onAuthStateChange(callback: (user: User | null) => void) {
-    authStateChangeListener = callback
-    
-    // Return cleanup function
-    return () => {
-      authStateChangeListener = null
-    }
-  }
 
   // Get current user synchronously (from cache)
   getCurrentUserSync(): User | null {

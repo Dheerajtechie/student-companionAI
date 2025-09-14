@@ -26,14 +26,14 @@ export function StudyTimer() {
   const [notes, setNotes] = useState('')
   
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  // const audioRef = useRef<HTMLAudioElement | null>(null)
 
   // Timer effect
   useEffect(() => {
     if (timer.isRunning && timer.timeRemaining > 0) {
       intervalRef.current = setInterval(() => {
         useStudySessionStore.getState().updateSessionInState('timer', {
-          timeRemaining: timer.timeRemaining - 1
+          duration_minutes: Math.floor((timer.timeRemaining - 1) / 60)
         })
       }, 1000)
     } else if (timer.timeRemaining === 0 && timer.isRunning) {

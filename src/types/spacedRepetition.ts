@@ -10,6 +10,9 @@ export interface SpacedRepetitionCard {
   is_active: boolean
   created_at: string
   updated_at: string
+  front_text?: string
+  back_text?: string
+  explanation?: string
 }
 
 export interface ReviewResult {
@@ -18,6 +21,7 @@ export interface ReviewResult {
   quality: number // 0-5 scale
   response_time: number // in seconds
   is_correct: boolean
+  card?: SpacedRepetitionCard
 }
 
 export interface CreateSpacedRepetitionCardData {

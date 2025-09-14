@@ -103,11 +103,11 @@ export function AddGoalModal({ isOpen, onClose, editingGoal }: AddGoalModalProps
     try {
       const goalData: CreateGoalData = {
         ...data,
-        due_date: data.due_date ? new Date(data.due_date).toISOString() : undefined,
+        deadline: data.due_date ? new Date(data.due_date).toISOString() : undefined,
       }
 
       if (editingGoal) {
-        await updateGoal(editingGoal.id, goalData)
+        await updateGoal(editingGoal.id, goalData as any)
       } else {
         await createGoal(goalData)
       }

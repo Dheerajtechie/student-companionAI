@@ -28,8 +28,8 @@ export function GoalCard({ goal, onEdit, onDelete }: GoalCardProps) {
     ? Math.min((goal.current_value / goal.target_value) * 100, 100)
     : 0
 
-  const isOverdue = goal.due_date && new Date(goal.due_date) < new Date() && goal.status !== 'completed'
-  const isDueSoon = goal.due_date && new Date(goal.due_date) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) && goal.status !== 'completed'
+  const isOverdue = goal.deadline && new Date(goal.deadline) < new Date() && goal.status !== 'completed'
+  const isDueSoon = goal.deadline && new Date(goal.deadline) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) && goal.status !== 'completed'
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -48,7 +48,7 @@ export function GoalCard({ goal, onEdit, onDelete }: GoalCardProps) {
     switch (status) {
       case 'completed':
         return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-      case 'in_progress':
+      case 'active':
         return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
       case 'paused':
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
@@ -91,7 +91,7 @@ export function GoalCard({ goal, onEdit, onDelete }: GoalCardProps) {
 
   const handleToggleComplete = async () => {
     try {
-      const newStatus = goal.status === 'completed' ? 'in_progress' : 'completed'
+      const newStatus = goal.status === 'completed' ? 'active' : 'completed'
       await updateGoal(goal.id, { status: newStatus })
     } catch (error) {
       console.error('Failed to update goal:', error)
@@ -107,8 +107,8 @@ export function GoalCard({ goal, onEdit, onDelete }: GoalCardProps) {
   }
 
   const getDaysRemaining = () => {
-    if (!goal.due_date) return null
-    const dueDate = new Date(goal.due_date)
+    if (!goal.deadline) return null
+    const dueDate = new Date(goal.deadline)
     const today = new Date()
     const diffTime = dueDate.getTime() - today.getTime()
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
@@ -129,7 +129,7 @@ export function GoalCard({ goal, onEdit, onDelete }: GoalCardProps) {
           </div>
           <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              {goal.name}
+              {goal.title}
             </h3>
             <div className="flex items-center space-x-2 mt-1">
               <span className={cn(
@@ -232,7 +232,7 @@ export function GoalCard({ goal, onEdit, onDelete }: GoalCardProps) {
             <div>
               <p className="text-xs text-gray-500 dark:text-gray-400">Due Date</p>
               <p className="text-sm font-medium text-gray-900 dark:text-white">
-                {goal.due_date ? formatDate(goal.due_date) : 'No deadline'}
+                {goal.deadline ? formatDate(goal.deadline) : 'No deadline'}
               </p>
             </div>
           </div>
@@ -255,7 +255,7 @@ export function GoalCard({ goal, onEdit, onDelete }: GoalCardProps) {
                 isDueSoon ? "text-yellow-600 dark:text-yellow-400" :
                 "text-gray-900 dark:text-white"
               )}>
-                {goal.due_date ? (
+                {goal.deadline ? (
                   isOverdue ? `${Math.abs(getDaysRemaining() || 0)} days ago` :
                   `${getDaysRemaining()} days`
                 ) : 'No deadline'}
