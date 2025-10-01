@@ -258,3 +258,12 @@ For support and questions:
 ---
 
 **Built with ❤️ for learners everywhere**
+
+## Demo/Offline Mode
+
+If you want to explore the UI without setting up external services:
+
+- Supabase: When `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are not set, the app uses a local in-browser storage shim that mimics a subset of Supabase. Accounts and data are stored in `localStorage` and persist in the browser only.
+- AI Providers: If `OPENAI_API_KEY`/`GROQ_API_KEY`/`GEMINI_API_KEY` are missing, the app falls back to a mock AI provider that generates sample questions and study plans locally.
+
+This makes all routes and features usable for demos and development without real credentials. To switch to real services, add the keys to `.env.local` and refresh.

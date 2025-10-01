@@ -117,6 +117,18 @@ export class QuestionService {
     return data
   }
 
+  // Convenience wrapper for store usage
+  static async recordAttempt(userId: string, questionId: string, input: Omit<QuestionAttempt, 'id' | 'user_id' | 'question_id' | 'created_at'>): Promise<QuestionAttempt> {
+    return this.recordQuestionAttempt({
+      user_id: userId,
+      question_id: questionId,
+      user_answer: input.user_answer,
+      is_correct: input.is_correct,
+      time_spent_seconds: input.time_spent_seconds,
+      confidence_level: input.confidence_level
+    })
+  }
+
   // Get question attempts for a user
   static async getQuestionAttempts(userId: string, questionId?: string): Promise<QuestionAttempt[]> {
     let query = supabase
@@ -216,5 +228,22 @@ export class QuestionService {
     if (error) {
       throw new Error(`Failed to bulk delete questions: ${error.message}`)
     }
+  }
+
+  // Get random questions for practice
+  static async getRandomQuestions(userId: string, count: number, filters?: QuestionFilters): Promise<Question[]> {
+    // Fetch a broader set then sample locally for simplicity
+    const all = await this.getQuestions(userId, filters)
+    if (all.length <= count) return all
+    const selected: Question[] = []
+    const used = new Set<number>()
+    while (selected.length < count && used.size < all.length) {
+      const idx = Math.floor(Math.random() * all.length)
+      if (!used.has(idx)) {
+        used.add(idx)
+        selected.push(all[idx])
+      }
+    }
+    return selected
   }
 }

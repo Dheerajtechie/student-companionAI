@@ -31,7 +31,7 @@ export const debounce = <T extends (...args: any[]) => any>(
   func: T,
   wait: number
 ): ((...args: Parameters<T>) => void) => {
-  let timeout: NodeJS.Timeout | null = null
+  let timeout: ReturnType<typeof setTimeout> | null = null
   
   return (...args: Parameters<T>) => {
     if (timeout) clearTimeout(timeout)
@@ -90,7 +90,7 @@ export const optimizeImage = (src: string, width?: number, height?: number, qual
 
 // Bundle size monitoring
 export const logBundleSize = () => {
-  if (process.env.NODE_ENV === 'development') {
+  if (import.meta.env.MODE === 'development') {
     const scripts = document.querySelectorAll('script[src]')
     // let totalSize = 0
     
@@ -248,7 +248,7 @@ export const initializePerformanceOptimizations = () => {
   clearOldCaches()
   
   // Log bundle size in development
-  if (process.env.NODE_ENV === 'development') {
+  if (import.meta.env.MODE === 'development') {
     logBundleSize()
   }
   
