@@ -5,6 +5,9 @@ import type {
   GenerateQuestionsRequest, 
   GeneratedQuestion,
   StudyPlanData,
+  StudyTopic,
+  StudySchedule,
+  StudyMilestone,
   } from '../types'
 
 // Enhanced AI Provider interface
@@ -215,15 +218,7 @@ ${request.include_explanations ? 'Include detailed explanations for each answer.
   private parseStudyPlanResponse(content: string): StudyPlanData {
     try {
       const parsed = JSON.parse(content)
-      return {
-        title: parsed.title || 'Study Plan',
-        description: parsed.description || '',
-        duration_days: parsed.duration_days || 30,
-        topics: parsed.topics || [],
-        schedule: parsed.schedule || [],
-        milestones: parsed.milestones || [],
-        recommendations: parsed.recommendations || []
-      }
+      return normalizeStudyPlan(parsed)
     } catch (error) {
       console.error('Failed to parse study plan response:', error)
       throw new Error('Invalid study plan format from OpenAI')
@@ -422,16 +417,7 @@ Format as JSON:
       const jsonMatch = content.match(/\{[\s\S]*\}/)
       const jsonString = jsonMatch ? jsonMatch[0] : content
       const parsed = JSON.parse(jsonString)
-      
-      return {
-        title: parsed.title || 'Study Plan',
-        description: parsed.description || '',
-        duration_days: parsed.duration_days || 30,
-        topics: parsed.topics || [],
-        schedule: parsed.schedule || [],
-        milestones: parsed.milestones || [],
-        recommendations: parsed.recommendations || []
-      }
+      return normalizeStudyPlan(parsed)
     } catch (error) {
       console.error('Failed to parse study plan response:', error)
       throw new Error('Invalid study plan format from Groq')
@@ -593,19 +579,99 @@ Format as JSON:
       const jsonMatch = content.match(/\{[\s\S]*\}/)
       const jsonString = jsonMatch ? jsonMatch[0] : content
       const parsed = JSON.parse(jsonString)
-      
-      return {
-        title: parsed.title || 'Study Plan',
-        description: parsed.description || '',
-        duration_days: parsed.duration_days || 30,
-        topics: parsed.topics || [],
-        schedule: parsed.schedule || [],
-        milestones: parsed.milestones || [],
-        recommendations: parsed.recommendations || []
-      }
+      return normalizeStudyPlan(parsed)
     } catch (error) {
       console.error('Failed to parse study plan response:', error)
       throw new Error('Invalid study plan format from Gemini')
+    }
+  }
+}
+
+// Mock Provider (offline/demo fallback)
+class MockProvider implements EnhancedAIProvider {
+  name = 'mock'
+  isAvailable = true
+  priority = 99
+  private stats = { requests: 0, errors: 0, totalResponseTime: 0 }
+
+  async generateQuestions(request: GenerateQuestionsRequest): Promise<GeneratedQuestion[]> {
+    const start = Date.now()
+    this.stats.requests++
+    try {
+      const count = Math.max(1, Math.min(20, request.count))
+      const topics = request.topic ? [request.topic] : ['general']
+      const questions: GeneratedQuestion[] = Array.from({ length: count }).map((_, i) => ({
+        question_text: `(${i + 1}) ${topics[0]} - Sample ${request.question_type} question`,
+        question_type: request.question_type,
+        options: request.question_type === 'multiple_choice' ? ['Option A', 'Option B', 'Option C', 'Option D'] : undefined,
+        correct_answer: request.question_type === 'true_false' ? 'True' : 'Sample answer',
+        explanation: request.include_explanations ? 'This is a mock explanation for demo mode.' : undefined,
+        difficulty: request.difficulty,
+        tags: [topics[0], 'demo']
+      }))
+      this.stats.totalResponseTime += Date.now() - start
+      return questions
+    } catch (e) {
+      this.stats.errors++
+      throw e
+    }
+  }
+
+  async generateStudyPlan(subject: string, topics: string[], duration: number): Promise<StudyPlanData> {
+    const start = Date.now()
+    this.stats.requests++
+    const days = Math.max(7, Math.min(60, duration || 30))
+    const plan = normalizeStudyPlan({
+      title: `${subject} Study Plan (Demo)`,
+      description: 'This is a mock study plan generated for demo/offline mode.',
+      duration_days: days,
+      topics: topics.map((t: string, idx: number) => ({
+        id: `t-${idx}`,
+        name: t,
+        description: `${t} overview`,
+        estimated_hours: 3,
+        prerequisites: [],
+        resources: []
+      })),
+      schedule: {
+        daily_hours: 2,
+        weekly_schedule: {
+          monday: topics.slice(0, 2).map((t: string) => t),
+          tuesday: topics.slice(1, 3).map((t: string) => t),
+          wednesday: topics.slice(0, 1).map((t: string) => t),
+          thursday: topics.slice(2, 4).map((t: string) => t),
+          friday: topics.slice(0, 2).map((t: string) => t),
+          saturday: [],
+          sunday: []
+        },
+        review_sessions: {
+          frequency: 'weekly',
+          topics: topics
+        }
+      },
+      milestones: [
+        { id: 'm1', name: 'Week 1 Review', description: 'Review week 1 topics', target_date: new Date().toISOString(), topics: topics.slice(0, 2), is_completed: false },
+        { id: 'm2', name: 'Midpoint', description: 'Midpoint assessment', target_date: new Date().toISOString(), topics: topics.slice(0, 2), is_completed: false }
+      ],
+      recommendations: ['Maintain consistency', 'Focus on weak areas']
+    })
+    this.stats.totalResponseTime += Date.now() - start
+    return plan
+  }
+
+  async analyzePerformance(data: any): Promise<string> {
+    const start = Date.now()
+    this.stats.requests++
+    const msg = 'Demo analysis: Increase daily study time slightly and review incorrect answers to improve accuracy.'
+    this.stats.totalResponseTime += Date.now() - start
+    return msg
+  }
+
+  getUsageStats() {
+    return {
+      requests: this.stats.requests,
+      errors: this.stats.errors,
+      avgResponseTime: this.stats.requests > 0 ? this.stats.totalResponseTime / this.stats.requests : 0
     }
   }
 }
@@ -621,7 +687,8 @@ export class EnhancedAIService {
     this.providers = [
       new EnhancedOpenAIProvider(),
       new EnhancedGroqProvider(),
-      new EnhancedGeminiProvider()
+      new EnhancedGeminiProvider(),
+      new MockProvider()
     ]
     
     this.providerStats = new Map()
@@ -809,3 +876,45 @@ export class EnhancedAIService {
 
 // Export singleton instance
 export const enhancedAIService = new EnhancedAIService()
+
+// Helper: normalize arbitrary JSON into typed StudyPlanData
+function normalizeStudyPlan(input: any): StudyPlanData {
+  const topics: StudyTopic[] = (input.topics || []).map((t: any, idx: number) => ({
+    id: t.id || `t-${idx}`,
+    name: t.name || String(t.topic || `Topic ${idx + 1}`),
+    description: t.description || '',
+    estimated_hours: Number(t.estimated_hours || 2),
+    prerequisites: Array.isArray(t.prerequisites) ? t.prerequisites : [],
+    resources: Array.isArray(t.resources) ? t.resources : []
+  }))
+
+  const schedule: StudySchedule = {
+    daily_hours: Number(input.schedule?.daily_hours || 2),
+    weekly_schedule: typeof input.schedule?.weekly_schedule === 'object' && input.schedule?.weekly_schedule !== null
+      ? input.schedule.weekly_schedule
+      : { monday: topics.slice(0, 2).map((t) => t.name) },
+    review_sessions: {
+      frequency: (input.schedule?.review_sessions?.frequency as any) || 'weekly',
+      topics: Array.isArray(input.schedule?.review_sessions?.topics)
+        ? input.schedule.review_sessions.topics
+        : topics.slice(0, 2).map((t) => t.name)
+    }
+  }
+
+  const milestones: StudyMilestone[] = (input.milestones || []).map((m: any, idx: number) => ({
+    id: m.id || `m-${idx}`,
+    name: m.name || `Milestone ${idx + 1}`,
+    description: m.description || '',
+    target_date: m.target_date || new Date().toISOString(),
+    topics: Array.isArray(m.topics) ? m.topics : [],
+    is_completed: Boolean(m.is_completed || false)
+  }))
+
+  return {
+    topics,
+    schedule,
+    milestones,
+    estimated_duration: Number(input.duration_days || input.estimated_duration || 30),
+    difficulty_progression: Array.isArray(input.difficulty_progression) ? input.difficulty_progression : ['beginner', 'intermediate', 'advanced']
+  }
+}

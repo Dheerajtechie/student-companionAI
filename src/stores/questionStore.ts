@@ -102,7 +102,14 @@ export const useQuestionStore = create<QuestionStore>((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const question = await QuestionService.getQuestion(id)
+      // Fetch all and find by id to avoid missing getQuestion service
+      const { user } = useAuthStore.getState()
+      if (!user) {
+        set({ isLoading: false })
+        return null
+      }
+      const list = await QuestionService.getQuestions(user.id)
+      const question = list.find(q => q.id === id) || null
       set({ selectedQuestion: question, isLoading: false })
       return question
     } catch (error) {
@@ -294,7 +301,7 @@ export const useQuestionStore = create<QuestionStore>((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const results = await QuestionService.searchQuestions(user.id, query)
+      const results = await QuestionService.getQuestions(user.id, { search: query })
       set({ searchResults: results, isLoading: false })
     } catch (error) {
       set({ 
